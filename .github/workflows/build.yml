@@ -1,0 +1,44 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.x'
+          cache: false
+      - name: Build each independent Go program
+        shell: bash
+        run: |
+          set -euo pipefail
+          sources=(
+            CA1/part1/worker.go
+            CA1/part1/interface.go
+            CA1/part2/main.go
+            CA1/part3/main.go
+            CA2/auth-vm/main.go
+            CA2/file-vm/main.go
+            CA2/web-vm/main.go
+            CA2/pubsub/publisher.go
+            CA2/pubsub/subscriber.go
+            CA3/replica/main.go
+            CA3/client/main.go
+          )
+          for source in "${sources[@]}"; do
+            echo "Building $source"
+            go build -o "$RUNNER_TEMP/course-project" "$source"
+          done
+      - name: Build calculator container
+        run: docker build -t ds-ca1-calculator CA1/part3

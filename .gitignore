@@ -1,0 +1,36 @@
+# Local build outputs
+/bin/
+/build/
+*.exe
+*.test
+*.out
+/CA1/part1/worker
+/CA1/part1/interface
+/CA1/part2/part2_experiment
+/CA1/part3/service
+/CA2/auth-vm/auth-server
+/CA2/file-vm/file-server
+/CA2/web-vm/web-server
+/CA2/pubsub/publisher
+/CA2/pubsub/subscriber
+/CA3/ds-client
+/CA3/replica-server
+
+# Runtime files; retain recorded CSV, plots, and scenario observations
+/CA1/part1/temp/
+/CA3/results/replica*_data.json
+*.log
+
+# Notebook and Python caches
+.ipynb_checkpoints/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editor and OS metadata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
