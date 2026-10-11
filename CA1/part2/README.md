@@ -1,77 +1,59 @@
-# Part 2 – Concurrency, Scheduling and Context Switching in Go
+# Part 2 · Concurrency and Scheduling in Go
 
-## Overview
+[← CA1 overview](../README.md)
 
-This directory contains the implementation for Part 2 of the assignment that runs a large number of concurrent Go execution units (goroutines), vary key parameters and observe how scheduling, CPU contention and synchronization affect performance.
+A benchmark runner measures how goroutine count, `GOMAXPROCS`, and workload type affect throughput and task latency.
 
-## File Structure
+## Experiment design
 
-```text
-part2/
-├── main.go
-├── README.md
-└── results/
+| Parameter | Values |
+| --- | --- |
+| Goroutines | `1`, `2`, `4`, `8`, `16`, `32`, `64` |
+| `GOMAXPROCS` | `1`, `2`, `runtime.NumCPU()` |
+| Workload | `cpu`, `mixed` |
+| Tasks per goroutine | `2000` |
+| Inner-loop iterations | `10000` |
+
+The CPU workload runs a computation loop. The mixed workload combines computation, a shared mutex, and a short sleep. The runner executes 42 parameter combinations; if the detected CPU count is `1` or `2`, some `GOMAXPROCS` settings repeat.
+
+The CSV records workload, scheduler setting, goroutine count, total tasks, throughput, total time, and average/minimum/maximum/standard-deviation task latency. Latencies and elapsed time use microseconds; throughput uses tasks per second.
+
+## Run the benchmark
+
+From **`CA1/part2`**:
+
+```bash
+go run main.go
 ```
 
-## High Level Design
-
-The program is an experiment runner that systematically explores the performance impact of:
-
-1. Number of goroutines
-2. Type of workload
-3. GOMAXPROCS value
-
-For each combination it:
-
-- Spawns the given number of goroutines
-- Assigns a fixed number of tasks to each goroutine
-- Executes one of two workloads:
-   - CPU‑bound
-   - Mixed (CPU + synchronization + sleep)
-- Measures:
-   - Total execution time
-   - Throughput
-   - Average latency per task
-   - Min, max, and standard deviation of latency
-- Writes the results into a CSV file via the standard library.
-
-
-
-## Parameter Space
-
-1. Number of Goroutines: 1, 2, 4, 8, 16, 32, 64
-2. GOMAXPROCS Values: he program tests three different GOMAXPROCS settings(1, 2, runtime.NumCPU())
-3. Workload Types: The program defines and tests two workloads(cpu, mixed)
-
-
-## Build Instructions
-
-From inside the part2 directory:
+Or build and run:
 
 ```bash
 go build -o part2_experiment main.go
-```
-
-This creates an executable named part2_experiment.
-
-## Run Instructions
-
-```bash
 ./part2_experiment
 ```
 
-During execution, we will see logs like:
+The runner prints each configuration and **rewrites** `results/experiment_results.csv`. Copy the recorded CSV elsewhere first if you want to compare it with a new run.
 
-```text
-Number of CPU detected: 8
-Running: workload=cpu, GOMAXPROCS=1, goroutines=1
-Running: workload=cpu, GOMAXPROCS=1, goroutines=2
-...
-Running: workload=mixed, GOMAXPROCS=8, goroutines=64
-Results saved to results/experiment_results.csv
+## Results and plots
+
+The repository includes the original [CSV](results/experiment_results.csv) and [plotting notebook](plots.ipynb).
+
+| Plot | What it compares |
+| --- | --- |
+| [Throughput vs. goroutines](results/throughput_vs_goroutines.png) | Task throughput by workload and scheduler setting |
+| [Average latency vs. goroutines](results/avg_latency_vs_goroutines.png) | Mean task latency |
+| [Latency variation vs. goroutines](results/std_latency_vs_goroutines.png) | Standard deviation of task latency |
+| [Throughput vs. latency](results/throughput_vs_latency.png) | Relationship between throughput and average task latency |
+| [Latency boxplot](results/latency_boxplot.png) | Distribution of per-configuration average latencies |
+
+![Recorded throughput versus goroutine count](results/throughput_vs_goroutines.png)
+
+To regenerate the plots, install the optional Python dependencies and launch Jupyter from `CA1/part2`:
+
+```bash
+python -m pip install jupyter pandas matplotlib seaborn
+jupyter notebook plots.ipynb
 ```
 
-After completion:
-
-- The results/ directory will exist.
-- The CSV file results/experiment_results.csv will contain all experimental data.
+Run the notebook cells in order. They load the relative CSV path and save images in `results/`. Interpret the recorded measurements alongside the [CA1 report](../report.pdf); new results depend on CPU count, operating-system scheduling, and hardware.

@@ -1,157 +1,80 @@
-# Part 1 – IPC Between Two Processes Using Named Pipes
+# Part 1 · Inter-Process Communication with Named Pipes
 
-## Overview
+[← CA1 overview](../README.md)
 
-This part implements two independent Go programs that communicate via named pipes (FIFOs):
+Two independent Go programs implement an arithmetic request/response service. The interface sends newline-delimited text requests; the worker replies with JSON through a second named pipe.
 
-- worker: a computing service.
-- interface: a client that sends requests to the worker and prints responses.
+## Requirements and files
 
-Communication uses a simple text request format and JSON responses.
+Use Linux, a Linux VM, or WSL. The worker calls `syscall.Mkfifo`, which is unavailable on Windows. Run both processes from **`CA1/part1`** so they share the same relative FIFO paths.
 
-## Files
+| File or path | Purpose |
+| --- | --- |
+| [worker.go](worker.go) | Creates the FIFOs, validates requests, and computes results |
+| [interface.go](interface.go) | Reads user commands and displays worker responses |
+| `./temp/request.fifo` | Interface → worker requests |
+| `./temp/response.fifo` | Worker → interface responses |
 
-- worker.go: – Worker process implementation.
-- interface.go: – Interface process implementation.
-- README.md – This documentation.
-- Named pipes created under /temp:
-    - Request FIFO: /temp/request.fifo
-    - Response FIFO: /temp/response.fifo
+The worker creates `temp/` and the FIFOs. These runtime files are ignored by Git.
 
-## Build Instructions
+## Build and run
 
-From the part1 directory:
+Build each program separately from `CA1/part1`:
 
 ```bash
 go build -o worker worker.go
 go build -o interface interface.go
 ```
 
-This creates two binaries: worker and interface.
+Start the worker in the first terminal:
 
-## Run Instructions
+```bash
+./worker
+```
 
-1. Start the worker first:
+Start the interface in a second terminal, in the same directory:
 
-    ```bash
-    ./worker
-    ```
+```bash
+./interface
+```
 
-    The worker:
-    - Creates the FIFOs if they do not exist.
-    - Opens temp/request.fifo for reading.
-    - Opens /temp/response.fifo for writing.
-    - Waits for requests and responds.
+Opening a FIFO can block while waiting for the other process; start the interface even if the worker appears to be waiting. Enter arithmetic commands at the interface prompt. Stop each process with `Ctrl+C`.
 
-2. In a separate terminal, start the interface:
+## Request and response protocol
 
-    ```bash
-    ./interface
-    ```
-
-    The interface:
-    - Waits for the FIFOs.
-    - Opens /temp/request.fifo for writing.
-    - Opens /temp/response.fifo for reading.
-    - Reads commands and prints responses.
-
-## Protocol
-
-### Request Format
-
-Each request is a single line:
+Each request is one line:
 
 ```text
 OP A B
 ```
 
-Where:
-
-- OP is one of the {ADD, SUB, MUL, DIV, MOD, POW, MAX, MIN}
-- A and B are numeric operands.
-
-Examples:
+Supported operations are `ADD`, `SUB`, `MUL`, `DIV`, `MOD`, `POW`, `MAX`, and `MIN`. For example:
 
 ```text
 ADD 5 8
-SUB 12 3
+DIV 20 0
 MUL 3 6
-DIV 8 6
-MOD 8 7
-POW 6 12
-MAX 12 7
-MIN 7 6
 ```
 
-### Response Format
-
-The worker responds in JSON:
+Successful response:
 
 ```json
-{
-    "status": "OK" | "ERROR",
-    "result": <number>,   // present only on success
-    "error": "<message>"  // present only on failure
-}
+{"status":"OK","result":13}
 ```
 
-Example responses:
+Error response:
 
 ```json
-{"status":"OK", "result": 12}
-{"status":"ERROR", "error": "Division by zero"}
+{"status":"ERROR","error":"Division by zero"}
 ```
 
-Fields:
-
-- status: "OK" on success, "ERROR" on error.
-- result: computation result.
-- error: error description.
-
-The interface prints a simplified text version:
-
-- On success: OK <result_number>
-- On error: ERROR <error_message>
-
-## Example Session
+The `result` and `error` fields use `omitempty`; a zero numeric result may be absent from the JSON and decodes as zero in the interface. The interface displays a simpler representation:
 
 ```text
-$ ./worker
-[WORKER] 2026/04/30 16:08:56 Worker process started
-[WORKER] 2026/04/30 16:08:59 Worker Listening on ./temp/request.fifo and responding on ./temp/response.fifo
-[WORKER] 2026/04/30 16:09:07 Received request: "ADD 3 6\n"
-[WORKER] 2026/04/30 16:09:07 Sent response: {"status":"OK","result":9}
-[WORKER] 2026/04/30 16:09:15 Received request: "DIV 20 0\n"
-[WORKER] 2026/04/30 16:09:15 Sent response: {"status":"ERROR","error":"Division by zero"}
-[WORKER] 2026/04/30 16:09:29 Received request: "MUL a b\n"
-[WORKER] 2026/04/30 16:09:29 Sent response: {"status":"ERROR","error":"Invalid operand"}
-[WORKER] 2026/04/30 16:09:49 Received request: "OP 2 3\n"
-[WORKER] 2026/04/30 16:09:49 Sent response: {"status":"ERROR","error":"Invalid operation"}
-[WORKER] 2026/04/30 16:09:59 Received request: "ADD 7\n"
-[WORKER] 2026/04/30 16:09:59 Sent response: {"status":"ERROR","error":"Invalid arguments"}
-[WORKER] 2026/04/30 16:10:47 Received request: "MUL 8 9\n"
-[WORKER] 2026/04/30 16:10:47 Sent response: {"status":"OK","result":72}
-
-
-$ ./interface
-[INTERFACE] 2026/04/30 16:08:59 Interface process started
-Enter your requests:
-> ADD 3 6
-OK 9.000000
+> ADD 5 8
+OK 13.000000
 > DIV 20 0
 ERROR Division by zero
-> MUL a b
-ERROR Invalid operand
-> OP 2 3
-ERROR Invalid operation
-> ADD 7
-ERROR Invalid arguments
-> MUL 8 9
-OK 72.000000
 ```
 
-## Brief Explanation of Message Passing Protocol
-
-The message passing protocol uses two one way named pipes (FIFOs) to enable full duplex communication between the interface process and the worker process. The interface sends computation requests through the request.fifo pipe as single line text messages in the format OP A B, where OP represents the operation and A and B are numeric operands. Each request is terminated with a newline character so the worker can read it line by line. The worker continuously listens on this FIFO, parses each request, validates the arguments and operation, performs the requested computation and prepares a response.
-
-The response is sent back through a second pipe named response.fifo, using a JSON based message format. Each response contains a status field indicating either "OK" or "ERROR". If the request succeeds, the response includes a result field containing the computed numeric value. if an error occurs such as invalid arguments, division by zero or unsupported operations, the response instead includes an error field with a descriptive message. The interface reads this JSON response, decodes it and prints a output to the user. This bidirectional FIFO setup allows the two independent processes to communicate.
+The two one-way pipes form a bidirectional channel. Newlines delimit requests and responses so each process can read complete messages.
